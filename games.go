@@ -65,6 +65,7 @@ var games = []struct {
 	{"Name the note", "name the marked note", helpNoteKeys, true, false, &nameNote{}},
 	{"Find the note", "move the marker to the note asked for", helpFindKeys, true, true, &findNote{}},
 	{"Name the interval", "name the distance between two marked notes", "2–8 major/perfect · m then 2/3/6/7 minor · t tritone", true, false, &nameInterval{}},
+	{"Barre chords", "name each note of a barre chord, low string to high", helpNoteKeys, true, false, &barreChord{}},
 	{"Chord tones", "name the 3rd, 5th or 7th of a chord", helpFlatKeys, false, false, &chordTone{}},
 	{"Chords in a key", "name the chord on a degree of a major key", helpFlatKeys, false, false, &keyChord{}},
 }
@@ -233,6 +234,50 @@ func (g *nameInterval) key(k string, _ settings) (bool, bool, string) {
 		unit = "semitone"
 	}
 	return true, false, fmt.Sprintf("%s — that was %s, %d %s (string %d fret %d → string %d fret %d)", intervalNames[guess], intervalNames[answer], answer, unit, root.str+1, root.fret, top.str+1, top.fret)
+}
+
+type barreChord struct {
+	nameNote
+	chord    barre
+	queue    []pos
+	settings settings
+}
+
+func (s settings) plucked(c barre) []pos {
+	return slices.DeleteFunc(c.notes(), func(p pos) bool { return !s.enabled[p.str] })
+}
+
+func (g *barreChord) next(s settings) bool {
+	if s != g.settings {
+		g.queue, g.settings = nil, s
+	}
+	if len(g.queue) == 0 {
+		var chords []barre
+		for shape := range barreShapes {
+			for fret := max(s.lo, 1); fret <= s.hi-barreReach; fret++ {
+				chord := barre{shape, fret}
+				if len(s.plucked(chord)) > 0 {
+					chords = append(chords, chord)
+				}
+			}
+		}
+		if len(chords) == 0 {
+			return false
+		}
+		g.chord = pick(chords, g.chord)
+		g.queue = s.plucked(g.chord)
+	}
+	g.at, g.queue = g.queue[0], g.queue[1:]
+	return true
+}
+
+func (g *barreChord) view(s settings) string {
+	marks := map[pos]string{}
+	for _, p := range g.chord.notes() {
+		marks[p] = "○"
+	}
+	marks[g.at] = "●"
+	return fmt.Sprintf("%s\n\nChord: %s\n\nWhich note is ●?", s.board(marks), g.chord.name())
 }
 
 type chordQuestion struct {

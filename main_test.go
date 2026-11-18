@@ -346,6 +346,89 @@ func TestNameIntervalNeedsTwoPositions(t *testing.T) {
 	}
 }
 
+func TestBarreShapes(t *testing.T) {
+	cases := []struct {
+		chord barre
+		name  string
+		notes []pos
+	}{
+		{barre{0, 3}, "G major · E shape", []pos{{5, 3}, {4, 5}, {3, 5}, {2, 4}, {1, 3}, {0, 3}}},
+		{barre{1, 3}, "G minor · E shape", []pos{{5, 3}, {4, 5}, {3, 5}, {2, 3}, {1, 3}, {0, 3}}},
+		{barre{2, 3}, "G dominant 7th · E shape", []pos{{5, 3}, {4, 5}, {3, 3}, {2, 4}, {1, 3}, {0, 3}}},
+		{barre{3, 3}, "G minor 7th · E shape", []pos{{5, 3}, {4, 5}, {3, 3}, {2, 3}, {1, 3}, {0, 3}}},
+		{barre{4, 3}, "C major · A shape", []pos{{4, 3}, {3, 5}, {2, 5}, {1, 5}, {0, 3}}},
+		{barre{5, 3}, "C minor · A shape", []pos{{4, 3}, {3, 5}, {2, 5}, {1, 4}, {0, 3}}},
+		{barre{6, 3}, "C dominant 7th · A shape", []pos{{4, 3}, {3, 5}, {2, 3}, {1, 5}, {0, 3}}},
+		{barre{7, 3}, "C minor 7th · A shape", []pos{{4, 3}, {3, 5}, {2, 3}, {1, 4}, {0, 3}}},
+	}
+	for _, c := range cases {
+		if got := c.chord.name(); got != c.name {
+			t.Errorf("got name %q, want %q", got, c.name)
+		}
+		if got := c.chord.notes(); !slices.Equal(got, c.notes) {
+			t.Errorf("%s: got notes %v, want %v", c.name, got, c.notes)
+		}
+	}
+}
+
+func TestBarreChordAsksEnabledStringsLowToHigh(t *testing.T) {
+	s := settings{enabled: [6]bool{2: true, 3: true, 4: true}, lo: 0, hi: 12}
+	g := &barreChord{}
+
+	var strs []int
+	for range 3 {
+		g.next(s)
+		strs = append(strs, g.at.str)
+	}
+
+	if want := []int{4, 3, 2}; !slices.Equal(strs, want) {
+		t.Errorf("got strings %v, want %v", strs, want)
+	}
+}
+
+func TestBarreChordMovesToNewChordAfterLastString(t *testing.T) {
+	s := settings{enabled: [6]bool{4: true}, lo: 0, hi: 12}
+	g := &barreChord{}
+
+	g.next(s)
+	before := g.chord
+	g.next(s)
+
+	if g.chord == before {
+		t.Errorf("still on %s after its last string", before.name())
+	}
+}
+
+func TestBarreChordStaysWithinFretRange(t *testing.T) {
+	s := settings{enabled: [6]bool{true, true, true, true, true, true}, lo: 5, hi: 7}
+	g := &barreChord{}
+
+	for range 200 {
+		g.next(s)
+		if g.at.fret < 5 || g.at.fret > 7 {
+			t.Fatalf("got fret %d, outside frets 5-7", g.at.fret)
+		}
+	}
+}
+
+func TestNoBarreChordInOpenPosition(t *testing.T) {
+	g := &barreChord{}
+
+	if g.next(settings{enabled: [6]bool{true, true, true, true, true, true}, lo: 0, hi: 2}) {
+		t.Error("got a barre chord within frets 0-2")
+	}
+}
+
+func TestBarreChordNoteNamedCorrectly(t *testing.T) {
+	g := &barreChord{nameNote: nameNote{at: pos{4, 5}}}
+
+	answered, correct, _ := g.key("d", settings{})
+
+	if !answered || !correct {
+		t.Errorf("got answered=%v correct=%v, want both true", answered, correct)
+	}
+}
+
 func TestChordToneFlatAnsweredWithSharpKey(t *testing.T) {
 	g := &chordTone{q: chordQuestion{root: "C", typ: 1, tone: 0}}
 

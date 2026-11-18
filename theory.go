@@ -6,7 +6,10 @@ import (
 	"strings"
 )
 
-const letters = "CDEFGAB"
+const (
+	letters    = "CDEFGAB"
+	barreReach = 2
+)
 
 var (
 	notes         = []string{"A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"}
@@ -29,6 +32,20 @@ var (
 		{"7", "dominant 7th", []int{4, 7, 10}},
 		{"m7", "minor 7th", []int{3, 7, 10}},
 		{"m7b5", "half-diminished", []int{3, 6, 10}},
+	}
+
+	barreShapes = []struct {
+		shape, frets string
+		typ          int
+	}{
+		{"E", "022100", 0},
+		{"E", "022000", 1},
+		{"E", "020100", 5},
+		{"E", "020000", 6},
+		{"A", "x02220", 0},
+		{"A", "x02210", 1},
+		{"A", "x02020", 5},
+		{"A", "x02010", 6},
 	}
 
 	majorKeys    = []string{"C", "G", "D", "A", "E", "B", "F#", "Db", "Ab", "Eb", "Bb", "F"}
@@ -84,6 +101,23 @@ func keyChords(key string) []string {
 		chords[degree] = spell(key, degree, semis) + degreeSuffix[degree]
 	}
 	return chords
+}
+
+type barre struct{ shape, fret int }
+
+func (c barre) notes() []pos {
+	var ps []pos
+	for i, f := range barreShapes[c.shape].frets {
+		if f != 'x' {
+			ps = append(ps, pos{5 - i, c.fret + int(f-'0')})
+		}
+	}
+	return ps
+}
+
+func (c barre) name() string {
+	shape, root := barreShapes[c.shape], c.notes()[0]
+	return fmt.Sprintf("%s %s · %s shape", noteAt(root.str, root.fret), chordTypes[shape.typ].name, shape.shape)
 }
 
 func fretboard(frets int, marks map[pos]string, names, numbers bool) string {
